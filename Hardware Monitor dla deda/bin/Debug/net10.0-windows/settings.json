@@ -1,0 +1,20 @@
+{
+  "AlertRules": [
+    {
+      "HardwareName": "*",
+      "SensorName": "*",
+      "Threshold": 44,
+      "IsEnabled": true,
+      "Hysteresis": 3,
+      "DelaySeconds": 2
+    }
+  ],
+  "SoundFilePath": "C:\\Users\\L1kviN\\Downloads\\myinstants.mp3",
+  "Volume": 0.11,
+  "PollingIntervalMs": 1000,
+  "StartMinimized": false,
+  "AutoStartWithWindows": false,
+  "HotkeyModifiers": 0,
+  "HotkeyKey": 220,
+  "HotkeyDisplayString": "OemPipe"
+}
