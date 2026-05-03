@@ -3,6 +3,7 @@ using Hardware_Monitor_dla_deda.Services;
 using HardwareMonitor.Models;
 using HardwareMonitor.Services;
 using System.Runtime.InteropServices;
+using System.Drawing.Drawing2D;
 
 namespace Hardware_Monitor_dla_deda;
 
@@ -27,10 +28,12 @@ public partial class MainForm : Form
     private const int WM_HOTKEY = 0x0312;
     private const int HOTKEY_ID = 9001;
 
+    // Status animation
+    private int _statusPulsePhase;
+
     public MainForm(bool startMinimized = false)
     {
         InitializeComponent();
-        ApplyDarkTheme();
         _startMinimized = startMinimized;
         _monitorService = new HardwareMonitorService();
         _soundService = new SoundService();
@@ -55,54 +58,6 @@ public partial class MainForm : Form
         KeyUp += MainForm_KeyUp;
     }
 
-    private void ApplyDarkTheme()
-    {
-        Color bgMain = Color.FromArgb(30, 32, 38);
-        Color bgPanel = Color.FromArgb(38, 40, 48);
-        Color bgInput = Color.FromArgb(50, 52, 60);
-        Color bgGrid = Color.FromArgb(38, 40, 48);
-        Color accentPrimary = Color.FromArgb(70, 100, 180);
-        Color accentHover = Color.FromArgb(90, 120, 200);
-        Color textWhite = Color.FromArgb(235, 238, 245);
-        Color textLabel = Color.FromArgb(160, 168, 180);
-        Color gridHeader = Color.FromArgb(48, 50, 58);
-        Color gridLine = Color.FromArgb(55, 58, 66);
-        Color btnSecondary = Color.FromArgb(55, 58, 68);
-        Color btnSecondaryHover = Color.FromArgb(70, 73, 83);
-
-        BackColor = bgMain;
-        ForeColor = textWhite;
-
-        dataGridView1.BackgroundColor = bgGrid;
-        dataGridView1.DefaultCellStyle.BackColor = bgGrid;
-        dataGridView1.DefaultCellStyle.ForeColor = textWhite;
-        dataGridView1.DefaultCellStyle.SelectionBackColor = accentPrimary;
-        dataGridView1.DefaultCellStyle.SelectionForeColor = textWhite;
-        dataGridView1.GridColor = gridLine;
-        dataGridView1.ColumnHeadersDefaultCellStyle.BackColor = gridHeader;
-        dataGridView1.ColumnHeadersDefaultCellStyle.ForeColor = textLabel;
-        dataGridView1.EnableHeadersVisualStyles = false;
-
-        StyleButton(btnBrowseSound, btnSecondary, btnSecondaryHover, textWhite);
-        StyleButton(btnTestSound, accentPrimary, accentHover, textWhite);
-        StyleButton(btnStopSound, btnSecondary, btnSecondaryHover, textWhite);
-        StyleButton(btnApplyThreshold, accentPrimary, accentHover, textWhite);
-        StyleButton(btnCaptureHotkey, accentPrimary, accentHover, textWhite);
-        StyleButton(btnClearHotkey, btnSecondary, btnSecondaryHover, textWhite);
-    }
-
-    private void StyleButton(Button btn, Color back, Color hover, Color fore)
-    {
-        btn.BackColor = back;
-        btn.ForeColor = fore;
-        btn.FlatStyle = FlatStyle.Flat;
-        btn.FlatAppearance.BorderSize = 0;
-        btn.MouseEnter += (s, e) => { btn.BackColor = hover; };
-        btn.MouseLeave += (s, e) => { btn.BackColor = back; };
-    }
-
-  
-
     private void SetupNotifyIcon()
     {
         _notifyIcon.Text = "Hardware Monitor";
@@ -123,21 +78,27 @@ public partial class MainForm : Form
 
     private void ShowMainWindow()
     {
-        Show();
         WindowState = FormWindowState.Normal;
+        Show();
         Activate();
     }
 
     private void MainForm_Load(object? sender, EventArgs e)
     {
+        var accentColor = Color.FromArgb(82, 130, 255);
+        var successColor = Color.FromArgb(60, 210, 120);
+        var textColor = Color.FromArgb(228, 232, 240);
+        var textDimColor = Color.FromArgb(148, 156, 170);
+
         numThreshold.Value = (decimal)(_settings.AlertRules.FirstOrDefault()?.Threshold ?? 80);
         chkAutoStart.Checked = _settings.AutoStartWithWindows;
         txtSoundPath.Text = _settings.SoundFilePath ?? "";
         trackBarVolume.Value = (int)(_settings.Volume * 100);
+        lblVolumePercent.Text = $"{trackBarVolume.Value}%";
         _soundService.Volume = _settings.Volume;
         chkStartMinimized.Checked = _settings.StartMinimized;
 
-        // Загружаем сохранённый хоткей или ставим дефолтный
+        // Load hotkey
         if (_settings.HotkeyKey > 0)
         {
             _hotkeyManager.Register(_settings.HotkeyModifiers, _settings.HotkeyKey);
@@ -145,7 +106,6 @@ public partial class MainForm : Form
         }
         else
         {
-            // Дефолт: Ctrl+F8
             _hotkeyManager.Register(2, (int)Keys.F8);
             txtHotkeyDisplay.Text = "Ctrl + F8";
             _settings.HotkeyModifiers = 2;
@@ -158,19 +118,19 @@ public partial class MainForm : Form
         _monitorService.Start();
         _pollingTimer.Start();
 
-        if (_startMinimized)
+        if (_startMinimized || _settings.StartMinimized)
         {
             WindowState = FormWindowState.Minimized;
             Hide();
         }
-        // Перекрашиваем заголовок окна в тёмный
-        if (Environment.OSVersion.Version.Build >= 22000) // Windows 11
+
+        // Windows 11 dark title bar
+        if (Environment.OSVersion.Version.Build >= 22000)
         {
             int useDarkMode = 1;
             DwmSetWindowAttribute(Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDarkMode, sizeof(int));
 
-            // Цвет заголовка: тёмно-серый как у панелей
-            int captionColor = Color.FromArgb(38, 40, 48).ToArgb();
+            int captionColor = Color.FromArgb(26, 28, 36).ToArgb();
             DwmSetWindowAttribute(Handle, DWMWA_CAPTION_COLOR, ref captionColor, sizeof(int));
         }
     }
@@ -204,7 +164,6 @@ public partial class MainForm : Form
         _shiftDown = e.Shift;
         _altDown = e.Alt;
 
-        // Игнорируем чисто модификаторы
         if (e.KeyCode is Keys.ControlKey or Keys.ShiftKey or Keys.Menu)
             return;
 
@@ -234,11 +193,11 @@ public partial class MainForm : Form
     {
         _hotkeyManager.Register(result.ModifiersValue, result.KeyValue);
         txtHotkeyDisplay.Text = result.ToString();
-        btnCaptureHotkey.Text = "ЗАПИСАТЬ ХОТКЕЙ";
-        btnCaptureHotkey.BackColor = Color.FromArgb(40, 80, 160);
+        txtHotkeyDisplay.ForeColor = Color.FromArgb(82, 130, 255);
+        btnCaptureHotkey.Text = "Записать";
+        btnCaptureHotkey.BackColor = Color.FromArgb(82, 130, 255);
         _isCapturingHotkey = false;
 
-        // Сохраняем
         _settings.HotkeyModifiers = result.ModifiersValue;
         _settings.HotkeyKey = result.KeyValue;
         _settings.HotkeyDisplayString = result.ToString();
@@ -268,16 +227,25 @@ public partial class MainForm : Form
 
     private void UpdateIndicator(bool active)
     {
+        var successColor = Color.FromArgb(60, 210, 120);
+        var warningColor = Color.FromArgb(255, 180, 50);
+
         if (active)
         {
             lblIndicator.Text = "● АКТИВЕН";
-            lblIndicator.ForeColor = Color.FromArgb(0, 220, 100);
+            lblIndicator.ForeColor = successColor;
         }
         else
         {
             lblIndicator.Text = "● ПАУЗА";
-            lblIndicator.ForeColor = Color.FromArgb(220, 180, 0);
+            lblIndicator.ForeColor = warningColor;
         }
+    }
+
+    private void StatusAnimTimer_Tick(object? sender, EventArgs e)
+    {
+        // Subtle pulse effect on the status indicator dot
+        _statusPulsePhase = (_statusPulsePhase + 1) % 60;
     }
 
     private void OnPollingTimerTick(object? sender, EventArgs e)
@@ -297,15 +265,18 @@ public partial class MainForm : Form
             float highestTemp = 0;
             float threshold = _settings.AlertRules.FirstOrDefault()?.Threshold ?? 80;
 
+            var dangerColor = Color.FromArgb(60, 24, 24);
+            var warningColor = Color.FromArgb(52, 42, 20);
+
             foreach (var r in readings)
             {
                 var rowIndex = dataGridView1.Rows.Add(r.HardwareName, r.SensorName, $"{r.Value:F1}°C", $"{r.Max:F1}°C");
                 if (r.Value > highestTemp) highestTemp = r.Value;
 
                 if (r.Value > threshold)
-                    dataGridView1.Rows[rowIndex].DefaultCellStyle.BackColor = Color.FromArgb(70, 30, 30);
+                    dataGridView1.Rows[rowIndex].DefaultCellStyle.BackColor = dangerColor;
                 else if (r.Value > threshold * 0.85f)
-                    dataGridView1.Rows[rowIndex].DefaultCellStyle.BackColor = Color.FromArgb(65, 55, 25);
+                    dataGridView1.Rows[rowIndex].DefaultCellStyle.BackColor = warningColor;
             }
 
             bool shouldAlert = highestTemp > threshold;
@@ -346,7 +317,7 @@ public partial class MainForm : Form
         });
     }
 
-    // === UI ===
+    // === UI Event Handlers ===
 
     private void btnBrowseSound_Click(object? sender, EventArgs e)
     {
@@ -379,6 +350,8 @@ public partial class MainForm : Form
         float volume = trackBarVolume.Value / 100f;
         _soundService.Volume = volume;
         _settings.Volume = volume;
+        lblVolumePercent.Text = $"{trackBarVolume.Value}%";
+        lblVolumePercent.ForeColor = Color.FromArgb(82, 130, 255);
     }
 
     private void btnApplyThreshold_Click(object? sender, EventArgs e)
@@ -402,30 +375,33 @@ public partial class MainForm : Form
     {
         if (_isCapturingHotkey)
         {
-            // Отмена захвата
             _isCapturingHotkey = false;
-            btnCaptureHotkey.Text = "ЗАПИСАТЬ ХОТКЕЙ";
-            btnCaptureHotkey.BackColor = Color.FromArgb(40, 80, 160);
+            btnCaptureHotkey.Text = "Записать";
+            btnCaptureHotkey.BackColor = Color.FromArgb(82, 130, 255);
+            txtHotkeyDisplay.Text = _settings.HotkeyDisplayString ?? "Ctrl + F8";
+            txtHotkeyDisplay.ForeColor = Color.FromArgb(82, 130, 255);
             return;
         }
 
         _isCapturingHotkey = true;
-        btnCaptureHotkey.Text = "НАЖМИ КЛАВИШУ...";
-        btnCaptureHotkey.BackColor = Color.FromArgb(220, 140, 0);
+        btnCaptureHotkey.Text = "Нажми клавишу...";
+        btnCaptureHotkey.BackColor = Color.FromArgb(255, 160, 30);
         txtHotkeyDisplay.Text = "Ожидание...";
+        txtHotkeyDisplay.ForeColor = Color.FromArgb(148, 156, 170);
     }
 
     private void btnClearHotkey_Click(object? sender, EventArgs e)
     {
         _hotkeyManager.Unregister();
         txtHotkeyDisplay.Text = "Не задан";
+        txtHotkeyDisplay.ForeColor = Color.FromArgb(148, 156, 170);
         _settings.HotkeyKey = 0;
         _settings.HotkeyModifiers = 0;
         _settings.HotkeyDisplayString = "Не задан";
         _settings.Save();
         _isCapturingHotkey = false;
-        btnCaptureHotkey.Text = "ЗАПИСАТЬ ХОТКЕЙ";
-        btnCaptureHotkey.BackColor = Color.FromArgb(40, 80, 160);
+        btnCaptureHotkey.Text = "Записать";
+        btnCaptureHotkey.BackColor = Color.FromArgb(82, 130, 255);
     }
 
     private void chkAutoStart_CheckedChanged(object? sender, EventArgs e)
@@ -450,6 +426,7 @@ public partial class MainForm : Form
     {
         if (disposing)
         {
+            _statusAnimTimer?.Stop();
             _pollingTimer?.Stop();
             _monitorService?.Stop();
             _soundService?.Dispose();
