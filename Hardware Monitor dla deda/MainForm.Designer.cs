@@ -233,6 +233,7 @@ namespace Hardware_Monitor_dla_deda
             dataGridView1.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
             dataGridView1.AlternatingRowsDefaultCellStyle.BackColor = cGridRowAlt;
             dataGridView1.ScrollBars = ScrollBars.Vertical;
+            dataGridView1.ShowCellToolTips = false;
             panelGrid.Controls.Add(dataGridView1);
 
             // ====== ALERT CONFIG PANEL ======

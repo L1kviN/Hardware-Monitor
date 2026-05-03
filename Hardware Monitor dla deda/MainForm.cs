@@ -12,6 +12,12 @@ public partial class MainForm : Form
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(Point pt);
+
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
     private const int DWMWA_CAPTION_COLOR = 35;
     private readonly HardwareMonitorService _monitorService;
@@ -24,6 +30,7 @@ public partial class MainForm : Form
     private bool _isMonitoringActive = true;
     private readonly bool _startMinimized;
     private bool _isCapturingHotkey;
+    private readonly ToolTip _cellToolTip;
 
     private const int WM_HOTKEY = 0x0312;
     private const int HOTKEY_ID = 9001;
@@ -56,6 +63,10 @@ public partial class MainForm : Form
         FormClosing += MainForm_FormClosing;
         KeyDown += MainForm_KeyDown;
         KeyUp += MainForm_KeyUp;
+
+        _cellToolTip = new ToolTip();
+        dataGridView1.CellMouseEnter += DataGridView1_CellMouseEnter;
+        dataGridView1.CellMouseLeave += DataGridView1_CellMouseLeave;
     }
 
     private void SetupNotifyIcon()
@@ -315,6 +326,33 @@ public partial class MainForm : Form
             MessageBox.Show(ex.Message, "Ошибка мониторинга",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         });
+    }
+
+    // === DataGridView ToolTip Handlers ===
+
+    private void DataGridView1_CellMouseEnter(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
+
+        // Проверка: наше окно должно быть foreground-окном
+        IntPtr foregroundHwnd = GetForegroundWindow();
+        if (foregroundHwnd != Handle) return;
+
+        // Дополнительная страховка: окно под курсором должно быть нашим
+        IntPtr windowUnderCursor = WindowFromPoint(Cursor.Position);
+        if (windowUnderCursor != Handle) return;
+
+        var cell = dataGridView1.Rows[e.RowIndex].Cells[e.ColumnIndex];
+        string text = cell.Value?.ToString() ?? "";
+        if (string.IsNullOrEmpty(text)) return;
+
+        _cellToolTip.Show(text, dataGridView1,
+            dataGridView1.PointToClient(Cursor.Position), 3000);
+    }
+
+    private void DataGridView1_CellMouseLeave(object? sender, DataGridViewCellEventArgs e)
+    {
+        _cellToolTip.Hide(dataGridView1);
     }
 
     // === UI Event Handlers ===
